@@ -149,8 +149,7 @@ Returns: Clean text content from top search results.
 Query tips:
 describe the ideal page, not keywords. "blog post comparing React and Vue performance" not "React vs Vue".
 Use category:people / category:company to search through Linkedin profiles / companies respectively.
-Treat returned highlights as sufficient when they answer the question. Avoid equivalent searches.
-When full text is needed, collect all relevant URLs first and make one web_fetch_exa call. Do not fetch results one at a time.`,
+If highlights are insufficient, follow up with web_fetch_exa on the best URLs.`,
     parameters: Type.Object(
       {
         query: Type.String({
@@ -205,21 +204,17 @@ When full text is needed, collect all relevant URLs first and make one web_fetch
   pi.registerTool({
     name: EXA_FETCH_TOOL,
     label: "Exa Fetch",
-    description: `Read a webpage's full content as clean markdown. Use after web_search_exa when highlights are insufficient or to read any known URL.
+    description: `Read a webpage's full content as clean markdown. Use after web_search_exa when highlights are insufficient or to read any URL.
 
-Best for: Extracting full content from known URLs.
-Do not search for a URL the user already provided. Do not fetch pages whose search highlights already answer the question.
-Before calling, collect every URL needed for the current step and send them together. Do not make one call per URL.
-Call again only for newly discovered URLs, failed pages, or when the previous extraction was insufficient.
-Returns: Clean markdown content and metadata from the page(s).`,
+Best for: Extracting full content from known URLs. Batch multiple URLs in one call.
+Returns: Clean text content and metadata from the page(s).`,
     parameters: Type.Object(
       {
         urls: Type.Array(
           Type.String({ minLength: 1 }),
           {
             minItems: 1,
-            description:
-              "URLs to read. Collect all URLs needed for the current step and batch them in one call.",
+            description: "URLs to read. Batch multiple URLs in one call.",
           },
         ),
         maxCharacters: Type.Optional(
