@@ -60,10 +60,6 @@ function validateWebUrl(rawUrl: string): string {
   return url.href;
 }
 
-function sourceHost(url: string): string {
-  return URL.parse(url)?.hostname.replace(/^www\./, "") || url;
-}
-
 function getText(content: Array<{ type?: string; text?: string }>): string {
   return content
     .filter((part) => part.type === "text")
@@ -198,10 +194,8 @@ When full text is needed, collect all relevant URLs first and make one web_fetch
       if (context.isError) return new Text(theme.fg("error", text || "Exa search failed"), 0, 0);
       if (expanded) return new Text(theme.fg("toolOutput", text), 0, 0);
 
-      const resultCount = (text.match(/^Title:\s+/gm) ?? []).length;
-      const status = resultCount ? `${resultCount} results` : text.split("\n", 1)[0] || "Search complete";
       return new Text(
-        `${theme.fg("success", status)}\n${theme.fg("dim", `${text.length.toLocaleString()} chars | ${text.split("\n").length.toLocaleString()} lines | ${keyHint("app.tools.expand", "to expand")}`)}`,
+        `${theme.fg("success", "Search complete")}\n${theme.fg("dim", `${text.length.toLocaleString()} chars | ${text.split("\n").length.toLocaleString()} lines | ${keyHint("app.tools.expand", "to expand")}`)}`,
         0,
         0,
       );
@@ -251,18 +245,8 @@ Returns: Clean markdown content and metadata from the page(s).`,
       if (context.isError) return new Text(theme.fg("error", text || "Exa fetch failed"), 0, 0);
       if (expanded) return new Text(theme.fg("toolOutput", text), 0, 0);
 
-      const fetchedUrls = [...text.matchAll(/^URL:\s+(\S+)/gm)].map((match) => match[1] ?? "");
-      const requestedUrls = Array.isArray(context.args.urls) ? context.args.urls : [];
-      const urls = fetchedUrls.length ? fetchedUrls : requestedUrls;
-      const pageCount = Math.max((text.match(/^#\s+/gm) ?? []).length, urls.length, 1);
-      const title =
-        pageCount === 1 ? text.match(/^#\s+(.+)$/m)?.[1] ?? "Page fetched" : `${pageCount} pages fetched`;
-      const sources = [...new Set(urls.map(sourceHost))];
-      const hidden = Math.max(sources.length - 3, 0);
-      const source = sources.slice(0, 3).join(", ") || "Exa";
-      const stats = `${source}${hidden ? ` +${hidden} more` : ""} | ${text.length.toLocaleString()} chars | ${text.split("\n").length.toLocaleString()} lines`;
       return new Text(
-        `${theme.fg("success", title)}\n${theme.fg("dim", `${stats} | ${keyHint("app.tools.expand", "to expand")}`)}`,
+        `${theme.fg("success", "Fetch complete")}\n${theme.fg("dim", `${text.length.toLocaleString()} chars | ${text.split("\n").length.toLocaleString()} lines | ${keyHint("app.tools.expand", "to expand")}`)}`,
         0,
         0,
       );
