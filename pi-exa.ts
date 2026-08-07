@@ -1,23 +1,12 @@
 import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
-import {
-  DEFAULT_MAX_BYTES,
-  DEFAULT_MAX_LINES,
-  formatSize,
-  keyHint,
-  truncateHead,
-  type ExtensionAPI,
-} from "@earendil-works/pi-coding-agent";
+import { formatSize, keyHint, truncateHead, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Text } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 
-const EXA_MCP_URL = "https://mcp.exa.ai/mcp";
-const EXA_SEARCH_TOOL = "web_search_exa";
-const EXA_FETCH_TOOL = "web_fetch_exa";
 const REQUEST_TIMEOUT_MS = 65_000;
 
-type ExaTool = typeof EXA_SEARCH_TOOL | typeof EXA_FETCH_TOOL;
+type ExaTool = "web_search_exa" | "web_fetch_exa";
 
 let anonymousExaQueue = Promise.resolve();
 type McpResponse = {
@@ -42,21 +31,17 @@ function parseMcpResponse(body: string): McpResponse {
     try {
       const message = JSON.parse(payload) as McpResponse;
       if (message.id === 1 && (message.result || message.error)) return message;
-    } catch {
-      continue;
-    }
+    } catch {}
   }
   throw new Error("Exa MCP returned an invalid response");
 }
 
 function validateWebUrl(rawUrl: string): string {
   const url = URL.parse(rawUrl);
-  if (!url || (url.protocol !== "http:" && url.protocol !== "https:")) {
+  if (!url || (url.protocol !== "http:" && url.protocol !== "https:"))
     throw new Error("web_fetch_exa requires a valid HTTP(S) URL");
-  }
-  if (url.username || url.password) {
+  if (url.username || url.password)
     throw new Error("web_fetch_exa does not accept URLs with embedded credentials");
-  }
   return url.href;
 }
 
@@ -75,7 +60,8 @@ function callExa(
 ): Promise<string> {
   const apiKey = process.env.EXA_API_KEY?.trim();
   const request = async () => {
-    const response = await fetch(EXA_MCP_URL, {
+    const timeout = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
+    const response = await fetch("https://mcp.exa.ai/mcp", {
       method: "POST",
       headers: {
         accept: "application/json, text/event-stream",
@@ -88,9 +74,7 @@ function callExa(
         method: "tools/call",
         params: { name: tool, arguments: args },
       }),
-      signal: signal
-        ? AbortSignal.any([signal, AbortSignal.timeout(REQUEST_TIMEOUT_MS)])
-        : AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
     });
 
     const body = await response.text();
@@ -105,9 +89,8 @@ function callExa(
     const message = parseMcpResponse(body);
     const text = getText(message.result?.content ?? []);
 
-    if (message.error?.message || message.result?.isError) {
-      throw new Error(message.error?.message ?? (text || "Exa MCP tool failed"));
-    }
+    if (message.error?.message || message.result?.isError)
+      throw new Error(message.error?.message || text || "Exa MCP tool failed");
     if (!text) throw new Error("Exa MCP returned no content");
 
     return text;
@@ -121,14 +104,11 @@ function callExa(
 }
 
 async function truncateOutput(text: string): Promise<string> {
-  const output = truncateHead(text, {
-    maxBytes: DEFAULT_MAX_BYTES,
-    maxLines: DEFAULT_MAX_LINES,
-  });
+  const output = truncateHead(text);
   if (!output.truncated) return output.content;
 
-  const outputDir = await mkdtemp(join(tmpdir(), "pi-exa-"));
-  const outputPath = join(outputDir, "output.md");
+  const outputDir = await mkdtemp(`${tmpdir()}/pi-exa-`);
+  const outputPath = `${outputDir}/output.md`;
   await writeFile(outputPath, text, "utf8");
   return (
     `${output.content}\n\n[Output truncated: showing ${output.outputLines} of ${output.totalLines} lines ` +
@@ -139,7 +119,7 @@ async function truncateOutput(text: string): Promise<string> {
 
 export default function registerExaTools(pi: ExtensionAPI): void {
   pi.registerTool({
-    name: EXA_SEARCH_TOOL,
+    name: "web_search_exa",
     label: "Exa Search",
     description: `Search the web for any topic and get clean, ready-to-use content.
 
@@ -172,12 +152,12 @@ If highlights are insufficient, follow up with web_fetch_exa on the best URLs.`,
       if (!query) throw new Error("web_search_exa query must not be empty");
 
       onUpdate?.({ content: [{ type: "text", text: "Searching Exa..." }], details: undefined });
-      const text = await callExa(EXA_SEARCH_TOOL, { query, numResults: params.numResults }, signal);
+      const text = await callExa("web_search_exa", { query, numResults: params.numResults }, signal);
       return { content: [{ type: "text", text: await truncateOutput(text) }], details: undefined };
     },
     renderCall(args, theme) {
       const query = args.query.replace(/\s+/g, " ").trim();
-      const count = args.numResults === undefined ? "" : theme.fg("dim", ` (${args.numResults})`);
+      const count = args.numResults ? theme.fg("dim", ` (${args.numResults})`) : "";
       return new Text(
         theme.fg("toolTitle", theme.bold("web_search_exa ")) +
           theme.fg("accent", JSON.stringify(query)) +
@@ -202,7 +182,7 @@ If highlights are insufficient, follow up with web_fetch_exa on the best URLs.`,
   });
 
   pi.registerTool({
-    name: EXA_FETCH_TOOL,
+    name: "web_fetch_exa",
     label: "Exa Fetch",
     description: `Read a webpage's full content as clean markdown. Use after web_search_exa when highlights are insufficient or to read any URL.
 
@@ -229,7 +209,7 @@ Returns: Clean text content and metadata from the page(s).`,
     ),
     async execute(_toolCallId, params, signal) {
       const text = await callExa(
-        EXA_FETCH_TOOL,
+        "web_fetch_exa",
         { urls: [...new Set(params.urls.map(validateWebUrl))], maxCharacters: params.maxCharacters },
         signal,
       );
