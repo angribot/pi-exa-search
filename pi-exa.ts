@@ -38,6 +38,13 @@ function parseMcpResponse(body: string): McpResponse {
   throw new Error("Exa MCP returned an invalid response");
 }
 
+function lenientNumber(value: unknown, min?: number): number | undefined {
+  const coerced = Number(value);
+  if (!Number.isFinite(coerced)) return undefined;
+  if (min !== undefined && coerced < min) return undefined;
+  return coerced;
+}
+
 function validateWebUrl(rawUrl: string): string {
   const url = URL.parse(rawUrl);
   if (!url || (url.protocol !== "http:" && url.protocol !== "https:"))
@@ -135,6 +142,10 @@ describe the ideal page, not keywords. "blog post comparing React and Vue perfor
 Use category:people / category:company to search through Linkedin profiles / companies respectively.
 If highlights are insufficient, follow up with web_fetch_exa on the best URLs.`,
     promptSnippet: "Find web sources for a query, returning summaries and highlights",
+    prepareArguments: (args) => {
+      const raw = (args ?? {}) as Record<string, unknown>;
+      return { ...raw, numResults: lenientNumber(raw.numResults) } as { query: string; numResults?: number };
+    },
     parameters: Type.Object(
       {
         query: Type.String({
@@ -143,7 +154,7 @@ If highlights are insufficient, follow up with web_fetch_exa on the best URLs.`,
             "Natural language search query. Should be a semantically rich description of the ideal page, not just keywords. Optionally include category:<type> (company, people) to focus results — e.g. 'category:people John Doe software engineer'.",
         }),
         numResults: Type.Optional(
-          Type.Integer({
+          Type.Number({
             description: "Number of search results to return (default: 10).",
           }),
         ),
@@ -192,6 +203,10 @@ If highlights are insufficient, follow up with web_fetch_exa on the best URLs.`,
 Best for: Extracting full content from known URLs. Batch multiple URLs in one call.
 Returns: Clean text content and metadata from the page(s).`,
     promptSnippet: "Read page content for known URLs as clean markdown",
+    prepareArguments: (args) => {
+      const raw = (args ?? {}) as Record<string, unknown>;
+      return { ...raw, maxCharacters: lenientNumber(raw.maxCharacters, 1) } as { urls: string[]; maxCharacters?: number };
+    },
     parameters: Type.Object(
       {
         urls: Type.Array(
@@ -202,7 +217,7 @@ Returns: Clean text content and metadata from the page(s).`,
           },
         ),
         maxCharacters: Type.Optional(
-          Type.Integer({
+          Type.Number({
             description: "Maximum characters to extract per page (default: 3000)",
           }),
         ),
