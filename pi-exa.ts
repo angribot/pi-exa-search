@@ -1,4 +1,4 @@
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { formatSize, keyHint, truncateHead, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Text } from "@earendil-works/pi-tui";
@@ -9,6 +9,8 @@ const REQUEST_TIMEOUT_MS = 65_000;
 type ExaTool = "web_search_exa" | "web_fetch_exa";
 
 let anonymousExaQueue = Promise.resolve();
+const tempDirs = new Set<string>();
+
 type McpResponse = {
   id?: number;
   result?: {
@@ -60,6 +62,7 @@ function callExa(
 ): Promise<string> {
   const apiKey = process.env.EXA_API_KEY?.trim();
   const request = async () => {
+    signal?.throwIfAborted();
     const timeout = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
     const response = await fetch("https://mcp.exa.ai/mcp", {
       method: "POST",
@@ -108,6 +111,7 @@ async function truncateOutput(text: string): Promise<string> {
   if (!output.truncated) return output.content;
 
   const outputDir = await mkdtemp(`${tmpdir()}/pi-exa-`);
+  tempDirs.add(outputDir);
   const outputPath = `${outputDir}/output.md`;
   await writeFile(outputPath, text, "utf8");
   return (
@@ -130,6 +134,7 @@ Query tips:
 describe the ideal page, not keywords. "blog post comparing React and Vue performance" not "React vs Vue".
 Use category:people / category:company to search through Linkedin profiles / companies respectively.
 If highlights are insufficient, follow up with web_fetch_exa on the best URLs.`,
+    promptSnippet: "Find web sources for a query, returning summaries and highlights",
     parameters: Type.Object(
       {
         query: Type.String({
@@ -139,8 +144,6 @@ If highlights are insufficient, follow up with web_fetch_exa on the best URLs.`,
         }),
         numResults: Type.Optional(
           Type.Integer({
-            minimum: 1,
-            maximum: 100,
             description: "Number of search results to return (default: 10).",
           }),
         ),
@@ -188,6 +191,7 @@ If highlights are insufficient, follow up with web_fetch_exa on the best URLs.`,
 
 Best for: Extracting full content from known URLs. Batch multiple URLs in one call.
 Returns: Clean text content and metadata from the page(s).`,
+    promptSnippet: "Read page content for known URLs as clean markdown",
     parameters: Type.Object(
       {
         urls: Type.Array(
@@ -199,8 +203,6 @@ Returns: Clean text content and metadata from the page(s).`,
         ),
         maxCharacters: Type.Optional(
           Type.Integer({
-            minimum: 1,
-            maximum: 50_000,
             description: "Maximum characters to extract per page (default: 3000)",
           }),
         ),
@@ -226,5 +228,11 @@ Returns: Clean text content and metadata from the page(s).`,
         0,
       );
     },
+  });
+
+  pi.on("session_shutdown", async () => {
+    const dirs = [...tempDirs];
+    tempDirs.clear();
+    await Promise.all(dirs.map((dir) => rm(dir, { recursive: true, force: true })));
   });
 }
