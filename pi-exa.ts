@@ -238,7 +238,7 @@ Returns: Clean text content and metadata from the page(s).`,
       if (expanded) return new Text(theme.fg("toolOutput", text), 0, 0);
 
       return new Text(
-        `${theme.fg("success", "Fetch complete")}\n${theme.fg("dim", `${text.length.toLocaleString()} chars | ${text.split("\n").length.toLocaleString()} lines | ${keyHint("app.tools.expand", "to expand")}`)}`,
+        `${theme.fg("success", "Fetch finished")}\n${theme.fg("dim", `${text.length.toLocaleString()} chars | ${text.split("\n").length.toLocaleString()} lines | ${keyHint("app.tools.expand", "to expand")}`)}`,
         0,
         0,
       );
