@@ -144,7 +144,14 @@ If highlights are insufficient, follow up with web_fetch_exa on the best URLs.`,
     promptSnippet: "Find web sources for a query, returning summaries and highlights",
     prepareArguments: (args) => {
       const raw = (args ?? {}) as Record<string, unknown>;
-      return { ...raw, numResults: lenientNumber(raw.numResults) } as { query: string; numResults?: number };
+      const query = typeof raw.query === "number" || typeof raw.query === "boolean"
+        ? String(raw.query)
+        : raw.query;
+      return {
+        ...raw,
+        query: typeof query === "string" ? query.trim() : query,
+        numResults: lenientNumber(raw.numResults),
+      } as { query: string; numResults?: number };
     },
     parameters: Type.Object(
       {
@@ -205,7 +212,15 @@ Returns: Clean text content and metadata from the page(s).`,
     promptSnippet: "Read page content for known URLs as clean markdown",
     prepareArguments: (args) => {
       const raw = (args ?? {}) as Record<string, unknown>;
-      return { ...raw, maxCharacters: lenientNumber(raw.maxCharacters, 1) } as { urls: string[]; maxCharacters?: number };
+      let urls = raw.urls;
+      if (typeof urls === "string") {
+        try {
+          urls = JSON.parse(urls);
+        } catch {
+          urls = [urls];
+        }
+      }
+      return { ...raw, urls, maxCharacters: lenientNumber(raw.maxCharacters, 1) } as { urls: string[]; maxCharacters?: number };
     },
     parameters: Type.Object(
       {
